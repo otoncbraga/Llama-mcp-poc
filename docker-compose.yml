@@ -1,0 +1,59 @@
+services:
+  mongo:
+    image: mongo:7
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+
+  mcp-server:
+    build: ./mcp-server
+    environment:
+      - MONGODB_URI=mongodb://mongo:27017/reservations
+      - MCP_PORT=3333
+    ports:
+      - "3333:3333"
+    depends_on:
+      - mongo
+
+  ollama:
+    image: ollama/ollama:latest
+    environment:
+      - OLLAMA_KEEP_ALIVE=30m
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
+  ollama-init:
+    image: ollama/ollama:latest
+    depends_on:
+      - ollama
+    volumes:
+      - ollama_data:/root/.ollama
+    entrypoint: ["sh", "-lc", "ollama pull llama3.2:1b"]
+
+  client:
+    build: ./client
+    environment:
+      - MCP_URL=http://mcp-server:3333/mcp
+    command: ["node", "dist/run.js"]
+    depends_on:
+      - mcp-server
+
+  ai-agent:
+    build: ./ai-agent
+    environment:
+      - MCP_URL=http://mcp-server:3333/mcp
+      - OLLAMA_URL=http://ollama:11434
+      - OLLAMA_MODEL=llama3.2:1b
+      - TODAY_ISO=2026-01-25
+    stdin_open: true
+    tty: true
+    depends_on:
+      - mcp-server
+      - ollama
+
+volumes:
+  mongo_data:
+  ollama_data:
